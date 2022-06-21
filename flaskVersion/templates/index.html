@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>單字自動查找器</title>
+		<style>
+			html {
+				font-family: "Microsoft JhengHei", "Arial", "sans-serif";
+				text-align: center;
+			}
+			h1 {
+				font-size: 50px;
+			}
+			textarea {
+				height: 500px;
+				width: 500px;
+				margin-left: 150px;
+				font-size: 18px;
+			}
+			#progress {
+				width: 100%;
+				background-color: rgb(170,170,170);
+			}
+			#progressBar {
+				width: 0%;
+				height: 30px;
+				text-align: center; /* To center it horizontally (if you want) */
+				line-height: 30px; /* To center it vertically */
+				color: rgb(1024, 1024, 1024);
+			}
+			input[type = 'button'] {
+				font-size: 40px;
+				margin: 10px;
+			}
+			.green-background {
+				background-color: #4CAF50;
+			}
+			.lightblue-background {
+				background-color: rgb(0,255,255);
+			}
+		</style>
+	</head>
+	<body>
+		<h1>單字自動查找器 V1.0</h1>
+		<textarea id = 'wordsTextarea'></textarea>
+		<input type = 'button' id = 'uploadWordsButton' value = 'Upload'></input>
+		<div id = "progress" hidden = 'hidden'>
+			<div id = "progressBar">0%</div>
+		</div>
+		<p id = 'pleaseWait' hidden = 'hidden'>PLEASE WAIT......</p>
+		<input type = 'button' id = 'downloadFileButton' value = 'Download' hidden = 'hidden' disabled = 'true'></input>
+	</body>
+	<script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+	<script>
+		let resultForUpload = false;
+		let finishedRequest = false;
+		let idForCheckBackendAvailable;
+		initialize();
+		function uploadWords() {
+			
+			$.ajax({
+				url: "/upload", 
+				type: "POST",  
+				data: {'words' : document.getElementById("wordsTextarea").value}, 
+				timeout: 5000, 
+				async: false,
+				cache: false, 
+				error: function() {
+					alert("很抱歉，伺服器出現錯誤，請聯絡以下e-mail尋求幫助：aabb9052@gmail.com")
+				}
+			}).done(function(data) {
+				
+				if (data.error) {
+					alert("Error: " + data.error);
+					resultForUpload = false;
+					finishedRequest = true;
+				}
+				else {
+					alert("Upload success!");
+					document.getElementById("pleaseWait").removeAttribute("hidden");
+					document.getElementById("progress").removeAttribute('hidden');
+					resultForUpload = true;
+					finishedRequest = true;
+				}
+			});
+		}
+		function checkBackendAvailable() {
+			
+			let uploadWordsButton = document.getElementById("uploadWordsButton");
+			$.ajax({
+				url: "checkProgress",  
+				type: "POST", 
+				cache: false, 
+				data: {}
+			}).done(function(data) {
+				if (data.finishedAllTheWork == false) {
+					uploadWordsButton.disabled = true;
+					uploadWordsButton.value = "Waiting for server";
+				}
+				else {
+					uploadWordsButton.disabled = false;
+					uploadWordsButton.value = "Upload";
+				}
+			});
+		}
+		function initialize() {
+			document.getElementById("wordsTextarea").select();
+			checkBackendAvailable();
+			idForCheckBackendAvailable = setInterval(checkBackendAvailable, 500);
+			let uploadWordsButton = document.getElementById("uploadWordsButton");
+			uploadWordsButton.addEventListener("click", function() {
+				finishedRequest = false;
+				uploadWords();
+				if (resultForUpload == true) {
+					let elem = document.getElementById("progressBar");
+					elem.classList.add("green-background");
+					elem.classList.remove("lightblue-background");
+					elem.innerHTML = "0%";
+					elem.style.width = "0%";
+					document.getElementById("progress").removeAttribute('hidden');
+					let width = 0;
+					let id;
+					setTimeout(function () {
+						id = setInterval(frame, 200);
+					}, 1000);
+					function frame() {
+						if (width == '100') {
+							console.log(width);
+							clearInterval(id);
+							elem.style.width = "100%";
+							elem.innerHTML = "Saving file......";
+							id = setInterval(checkFileSaved, 200);
+							function checkFileSaved() {
+								$.ajax({
+									url: "/checkProgress", 
+									type: "POST", 
+									cache: false, 
+									data: {}
+								}).done(function(data) {
+									if (data.finishedAllTheWork == true) {
+										clearInterval(id);
+										elem.innerHTML = "Done!";
+										elem.classList.add("lightblue-background");
+										elem.classList.remove("green-background");
+										let downloadFileButton = document.getElementById("downloadFileButton");
+										downloadFileButton.disabled = false;
+										downloadFileButton.removeAttribute('hidden');
+										document.getElementById("pleaseWait").hidden = 'hidden';
+										setTimeout(function() {
+											alert("Done!");
+										}, 500);
+									}
+									else {
+										if (elem.innerHTML != "Saving file......") {
+											elem.innerHTML += ".";
+										}
+										else {
+											elem.innerHTML = "Saving file.";
+										}
+									}
+								});
+							}
+						}
+						else {
+							$.ajax({
+								url: "/checkProgress", 
+								type: "POST",  
+								data: {}
+							}).done(function(data) {
+								finishedItemNum = data.finished;
+								totalItemNum = data.total;
+								console.log("finished: " + finishedItemNum + " / total: " + totalItemNum);
+								if (totalItemNum != 0) {
+									let numString = String(finishedItemNum / totalItemNum * 100);
+									if (numString.split('.').length > 1) {
+										width = numString.split('.')[0] + '.' + numString.split('.')[1].substring(0, 2);
+									}
+									else {
+										width = numString;
+									}
+								}
+							});
+							console.log(width);
+							elem.style.width = width + "%";
+							elem.innerHTML = width + "%";
+						}
+					}
+				}
+			});
+			let downloadFileButton = document.getElementById("downloadFileButton");
+			downloadFileButton.addEventListener("click", function() {
+				window.open("/download");
+			});
+		}
+	</script>
+</html>
